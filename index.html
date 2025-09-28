@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maui SCADA/EMS - Industrial Grid Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0c111d;
+            color: #e5e7eb;
+        }
+        .kpi-box {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 1rem 1.5rem;
+        }
+        .generator-card {
+            background-color: #1f2937;
+            border-left: 5px solid #374151;
+            padding: 0.75rem 1rem;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        .generator-card:hover {
+            background-color: #374151;
+        }
+        .generator-card.selected {
+            background-color: #3b82f6;
+            border-left-color: #60a5fa;
+        }
+        .status-dot { height: 10px; width: 10px; border-radius: 9999px; }
+        .status-online { background-color: #22c55e; box-shadow: 0 0 5px #22c55e; }
+        .status-offline { background-color: #ef4444; }
+        .status-standby { background-color: #f59e0b; }
+        .status-ramping { background-color: #eab308; animation: pulse 2s infinite; }
+        .status-manual { background-color: #8b5cf6; box-shadow: 0 0 5px #8b5cf6;}
+        .status-charging { background-color: #3b82f6; box-shadow: 0 0 5px #3b82f6;}
+        .status-discharging { background-color: #ec4899; box-shadow: 0 0 5px #ec4899;}
+        .section-header {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #f9fafb;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #374151;
+        }
+        .chart-container {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+        }
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-button.active {
+            color: #60a5fa;
+            border-bottom-color: #60a5fa;
+        }
+        .tab-button:not(.active):hover {
+            background-color: #374151;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="p-4 sm:p-6 lg:p-8">
+    <div class="max-w-screen-2xl mx-auto">
+
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row justify-between items-center pb-4 border-b border-gray-700 mb-4">
+             <div>
+                <h1 class="text-3xl font-bold text-white">Industrial SCADA/EMS: Maui Grid Control</h1>
+                <p class="text-gray-400">High-Fidelity Power System Simulation & Control</p>
+            </div>
+             <div class="flex items-center space-x-4 mt-4 sm:mt-0">
+                <div id="simulationTime" class="text-lg font-mono bg-gray-900 px-4 py-2 rounded-md">00:00:00</div>
+                <div id="simulationStatus" class="flex items-center text-lg font-semibold"></div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Left Panel: KPIs & Controls -->
+            <div class="lg:w-1/4 flex-shrink-0">
+                <!-- Simulation Controls -->
+                <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                    <h3 class="font-bold text-white mb-3">SIMULATION CONTROL</h3>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <button id="startBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm">START</button>
+                        <button id="pauseBtn" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm">PAUSE</button>
+                        <button id="resetBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm">RESET</button>
+                    </div>
+                    <div class="text-white text-sm">
+                        <label for="speedControl">Speed:</label>
+                        <span id="speedLabel" class="font-mono w-16">60x</span>
+                        <input id="speedControl" type="range" min="1" max="7200" value="60" class="w-full">
+                    </div>
+                </div>
+                
+                <!-- Main KPIs -->
+                <div class="space-y-4">
+                    <h3 class="font-bold text-white">GRID KEY PERFORMANCE INDICATORS</h3>
+                    <div class="kpi-box">
+                        <div class="flex justify-between items-center text-gray-400 text-sm"><span>ISLAND DEMAND</span><span class="text-cyan-400 font-bold">LIVE</span></div>
+                        <div class="text-cyan-400 text-3xl font-bold text-right"><span id="totalDemand">0.0</span> <span class="text-lg">MW</span></div>
+                    </div>
+                    <div class="kpi-box">
+                        <div class="flex justify-between items-center text-gray-400 text-sm"><span>TOTAL GENERATION</span><span class="text-green-400 font-bold">LIVE</span></div>
+                        <div class="text-green-400 text-3xl font-bold text-right"><span id="totalGeneration">0.0</span> <span class="text-lg">MW</span></div>
+                    </div>
+                    <div class="kpi-box">
+                        <div class="flex justify-between items-center text-gray-400 text-sm"><span>SUPPLY BALANCE</span><span id="balanceStatus" class="font-bold">OK</span></div>
+                        <div id="gridBalance" class="text-3xl font-bold text-right"><span id="balanceValue">0.0</span> <span class="text-lg">MW</span></div>
+                    </div>
+                    <div class="kpi-box">
+                        <div class="flex justify-between items-center text-gray-400 text-sm"><span>GRID FREQUENCY</span><span class="text-purple-400 font-bold">STABLE</span></div>
+                        <div class="text-purple-400 text-3xl font-bold text-right"><span id="gridFrequency">60.00</span> <span class="text-lg">Hz</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Tabs & Content -->
+            <div class="flex-grow">
+                <!-- Tab Buttons -->
+                <div class="border-b border-gray-700">
+                    <nav class="flex -mb-px" id="tab-buttons">
+                        <button class="tab-button active" data-tab="overview">GRID OVERVIEW</button>
+                        <button class="tab-button" data-tab="agc">AGC: FIRM GENERATION</button>
+                        <button class="tab-button" data-tab="reports">REPORTS & ANALYTICS</button>
+                    </nav>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="tab-content-container" class="mt-6">
+                    <!-- Grid Overview Tab -->
+                    <div id="tab-overview" class="tab-content active">
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+                            <div class="chart-container h-80 flex flex-col">
+                                <h3 class="font-semibold text-lg mb-4 text-white flex-shrink-0">Daily Load Profile (Duck Curve)</h3>
+                                <div class="relative flex-grow"><canvas id="duckCurveChart"></canvas></div>
+                            </div>
+                            <div class="chart-container h-80 flex flex-col">
+                                <h3 class="font-semibold text-lg mb-4 text-white flex-shrink-0">Generation Mix</h3>
+                                <div class="relative flex-grow"><canvas id="generationMixChart"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <section>
+                                <h2 class="section-header">Variable & Storage Assets</h2>
+                                <div id="variable-generators-container" class="space-y-2 mt-4"></div>
+                                <div id="storage-container" class="space-y-2 mt-4"></div>
+                            </section>
+                            <section>
+                                <h2 class="section-header">Daily Analysis Report</h2>
+                                <div class="grid grid-cols-2 gap-4 text-center mt-4 bg-gray-800 p-4 rounded-lg">
+                                    <div><p class="text-gray-400">Max Load</p><p id="maxLoad" class="text-2xl font-bold">-- MW</p></div>
+                                    <div><p class="text-gray-400">Min Load</p><p id="minLoad" class="text-2xl font-bold">-- MW</p></div>
+                                    <div><p class="text-gray-400">Firm MWh</p><p id="firmGenTotal" class="text-2xl font-bold">--</p></div>
+                                    <div><p class="text-gray-400">Variable MWh</p><p id="variableGenTotal" class="text-2xl font-bold">--</p></div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <!-- AGC Tab -->
+                    <div id="tab-agc" class="tab-content">
+                        <div class="flex gap-6">
+                            <!-- Generator List -->
+                            <div class="w-1/3">
+                                <h2 class="section-header">Firm Generation Units</h2>
+                                <div id="firm-generators-list" class="space-y-2 mt-4 max-h-[70vh] overflow-y-auto"></div>
+                            </div>
+                            <!-- Generator Detail View -->
+                            <div class="w-2/3">
+                                <div id="generator-detail-view" class="bg-gray-800 p-4 rounded-lg">
+                                    <div id="agc-placeholder" class="text-center text-gray-400 py-20">
+                                        <p class="text-xl">Select a generator to view its control panel.</p>
+                                    </div>
+                                    <div id="agc-details" class="hidden">
+                                        <div class="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h2 id="detailGenName" class="text-2xl font-bold text-white"></h2>
+                                                <p id="detailGenType" class="text-gray-400"></p>
+                                            </div>
+                                            <div id="detailGenStatus" class="px-3 py-1 rounded-full text-sm font-semibold"></div>
+                                        </div>
+                                        <!-- Vitals -->
+                                        <div class="grid grid-cols-3 gap-4 mb-4">
+                                            <div class="kpi-box"><p class="text-sm text-gray-400">Temperature</p><p id="detailTemp" class="text-xl font-bold text-white"></p></div>
+                                            <div class="kpi-box"><p class="text-sm text-gray-400">Pressure</p><p id="detailPressure" class="text-xl font-bold text-white"></p></div>
+                                            <div class="kpi-box"><p class="text-sm text-gray-400">Efficiency</p><p id="detailEfficiency" class="text-xl font-bold text-white"></p></div>
+                                        </div>
+                                        <!-- Chart -->
+                                        <div class="h-48 chart-container p-2 relative mb-4">
+                                            <canvas id="detailGenChart"></canvas>
+                                        </div>
+                                        <!-- Controls -->
+                                        <div>
+                                            <h3 class="font-semibold text-white mb-2">PLC Control Logic</h3>
+                                             <p class="text-center mb-2 text-sm text-gray-400">Current Mode: <span id="detailControlMode" class="font-semibold"></span></p>
+                                            <div class="flex space-x-2">
+                                                <button id="forceStartBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded text-sm">Force Start</button>
+                                                <button id="forceStopBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded text-sm">Force Stop</button>
+                                                <button id="returnAutoBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded text-sm">Return to Auto</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reports Tab -->
+                    <div id="tab-reports" class="tab-content">
+                        <div class="text-center text-gray-400 py-20">
+                            <h2 class="text-2xl font-bold mb-4">Reporting & Analytics</h2>
+                            <p>This section is under construction.</p>
+                             <p>Future features will include: detailed run-hour reports, maintenance scheduling, and historical data analysis.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- INDUSTRIAL CONFIGURATION ---
+        const config = {
+            firmGenerators: [
+                { id: 'ST-1', name: 'Māʻalaea ST-1', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60 /*min*/, maintenanceInterval: 4000 /*hr*/ },
+                { id: 'ST-2', name: 'Māʻalaea ST-2', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
+                { id: 'ST-3', name: 'Māʻalaea ST-3', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
+                { id: 'ST-4', name: 'Māʻalaea ST-4', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
+                ...Array(15).fill(0).map((_, i) => ({ id: `RE-${i+1}`, name: `Kūpono RE-${i+1}`, type: 'Reciprocating Engine', capacity: (106/15), minOutput: 1, runHours: 0, rampRate: 0.5, startupTime: 5, maintenanceInterval: 2000 })),
+                ...Array(2).fill(0).map((_, i) => ({ id: `CC-${i+1}`, name: `Waena CC-${i+1}`, type: 'Combined Cycle', capacity: 53, minOutput: 10, runHours: 0, rampRate: 0.3, startupTime: 30, maintenanceInterval: 8000 })),
+            ],
+            variableGenerators: [
+                { id: 'solar-aes', name: 'AES Kuihelani Solar', type: 'Solar', capacity: 60 },
+                { id: 'wind-kaheawa1', name: 'Kaheawa Wind I', type: 'Wind', capacity: 30 },
+                { id: 'wind-kaheawa2', name: 'Kaheawa Wind II', type: 'Wind', capacity: 21 },
+                { id: 'wind-auwahi', name: 'Auwahi Wind', type: 'Wind', capacity: 21 },
+                { id: 'solar-kuia', name: 'Kuia Solar', type: 'Solar', capacity: 2.87 },
+                { id: 'solar-smaui', name: 'South Maui Solar', type: 'Solar', capacity: 2.87 },
+                { id: 'solar-lanai', name: 'Lanai Solar', type: 'Solar', capacity: 1.2 },
+                { id: 'solar-maui17', name: 'Maui 17-2 Solar', type: 'Solar', capacity: 0.735 },
+                { id: 'solar-customer', name: 'Customer-Sited Solar', type: 'Solar', capacity: 151 },
+                { id: 'solar-shared', name: 'Shared Solar', type: 'Solar', capacity: 0.028 },
+            ],
+            storageUnits: [
+                 { id: 'bess-aes', name: 'AES Kuihelani BESS', type: 'Storage', capacity: 240, maxChargeRate: 60, maxDischargeRate: 60, efficiency: 0.9 }
+            ]
+        };
+
+        // --- STATE INITIALIZATION ---
+        const createInitialState = () => ({
+            simTime: new Date(2025, 8, 28, 0, 0, 0),
+            isRunning: false,
+            simulationSpeed: 60,
+            intervalId: null,
+            grid: { totalDemand: 0, totalGeneration: 0, frequency: 60.0 },
+            dailyStats: { maxLoad: 0, minLoad: 999, firmMWh: 0, variableMWh: 0, day: 28 },
+            chartData: { labels: [], demand: [], netDemand: [], solarGen: [], windGen: [], firmGen: [], storageGen: [] },
+            lastChartUpdate: -999,
+            activeAGCGeneratorId: null,
+            generators: {
+                firm: config.firmGenerators.map(g => ({ ...g, status: 'Offline', output: 0, controlMode: 'Auto', vitals: { temp: 20, pressure: 1, efficiency: 0, outputHistory: [] } })),
+                variable: config.variableGenerators.map(g => ({ ...g, status: 'Offline', output: 0 })),
+                storage: config.storageUnits.map(s => ({ ...s, stateOfCharge: s.capacity / 2, status: 'Standby', output: 0 })),
+            }
+        });
+
+        let state = createInitialState();
+        
+        // --- CHARTS ---
+        let duckCurveChart, generationMixChart, detailGenChart;
+
+        function initializeCharts() {
+            const chartOptions = (title) => ({ responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' }, title: { display: true, text: 'MW', color: '#9ca3af' } } }, plugins: { legend: { labels: { color: '#e5e7eb' } } }, animation: { duration: 0 } });
+            
+            if (duckCurveChart) duckCurveChart.destroy();
+            duckCurveChart = new Chart(document.getElementById('duckCurveChart').getContext('2d'), { type: 'line', data: { labels: state.chartData.labels, datasets: [{ label: 'Total Demand', data: state.chartData.demand, borderColor: '#22d3ee', backgroundColor: '#22d3ee20', tension: 0.3, pointRadius: 0 }, { label: 'Net Demand', data: state.chartData.netDemand, borderColor: '#facc15', backgroundColor: '#facc1520', tension: 0.3, pointRadius: 0 }] }, options: chartOptions('Daily Load Profile') });
+
+            if (generationMixChart) generationMixChart.destroy();
+            generationMixChart = new Chart(document.getElementById('generationMixChart').getContext('2d'), { type: 'line', data: { labels: state.chartData.labels, datasets: [{ label: 'Solar', data: state.chartData.solarGen, backgroundColor: '#f59e0b', borderColor: '#f59e0b', fill: true, pointRadius: 0 }, { label: 'Wind', data: state.chartData.windGen, backgroundColor: '#3b82f6', borderColor: '#3b82f6', fill: true, pointRadius: 0 }, { label: 'Storage', data: state.chartData.storageGen, backgroundColor: '#ec4899', borderColor: '#ec4899', fill: true, pointRadius: 0 }, { label: 'Firm', data: state.chartData.firmGen, backgroundColor: '#ef4444', borderColor: '#ef4444', fill: true, pointRadius: 0 }] }, options: { ...chartOptions('Generation Mix'), scales: { ...chartOptions().scales, y: { ...chartOptions().scales.y, stacked: true } } } });
+
+            if(detailGenChart) detailGenChart.destroy();
+            detailGenChart = new Chart(document.getElementById('detailGenChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ label: 'Output (MW)', data: [], borderColor: '#22d3ee', backgroundColor: '#22d3ee20', tension: 0.3, pointRadius: 2, fill: true }] }, options: { ...chartOptions('Generator Output'), scales: { x: { ticks: { display: false } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } } }, plugins: { legend: { display: false } } } });
+        }
+        
+        function updateCharts(time) {
+            const timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            state.chartData.labels.push(timeString);
+            state.chartData.demand.push(state.grid.totalDemand);
+            const totalVariableGen = state.generators.variable.reduce((s, g) => s + g.output, 0);
+            state.chartData.netDemand.push(state.grid.totalDemand - totalVariableGen);
+            state.chartData.solarGen.push(state.generators.variable.filter(g => g.type === 'Solar').reduce((s, g) => s + g.output, 0));
+            state.chartData.windGen.push(state.generators.variable.filter(g => g.type === 'Wind').reduce((s, g) => s + g.output, 0));
+            state.chartData.storageGen.push(state.generators.storage[0].output);
+            state.chartData.firmGen.push(state.generators.firm.reduce((s, g) => s + g.output, 0));
+
+            const maxDataPoints = 144;
+            if (state.chartData.labels.length > maxDataPoints) Object.values(state.chartData).forEach(arr => arr.shift());
+            
+            duckCurveChart.update();
+            generationMixChart.update();
+        }
+
+        // --- SIMULATION LOGIC ---
+        function getDuckCurveDemand(hour) { return [90,85,80,78,80,95,110,120,125,120,115,110,105,100,110,125,145,170,180,185,175,150,120,100][hour]+(Math.random()-.5)*5; }
+        function getSolarOutputFactor(hour) { const p=[0,0,0,0,0,.1,.3,.5,.7,.85,.95,1,.95,.85,.7,.5,.3,.1,0,0,0,0,0,0]; return p[hour]*(Math.random()>.9?Math.random()*.6:1); }
+        function getWindOutputFactor() { return 0.3 + Math.random() * 0.5; }
+
+        function runEMS(netLoad, hour) { const b=state.generators.storage[0],t=1/60;if(hour>=10&&hour<=15&&netLoad<0){const p=Math.min(b.maxChargeRate,-netLoad,(b.capacity-b.stateOfCharge)/(b.efficiency*t));b.output=-p;b.stateOfCharge+=p*t*b.efficiency;b.status='Charging';}else if(hour>=18&&hour<=21&&netLoad>150&&b.stateOfCharge>0){const p=Math.min(b.maxDischargeRate,netLoad-150,b.stateOfCharge/t);b.output=p;b.stateOfCharge-=p*t;b.status='Discharging';}else{b.output=0;b.status='Standby';}b.stateOfCharge=Math.max(0,Math.min(b.capacity,b.stateOfCharge)); }
+
+        function runAGC(loadToMeet) {
+            let currentFirmGeneration = state.generators.firm.reduce((acc, g) => g.controlMode === 'Auto' ? acc + g.output : acc, 0);
+            let deficit = loadToMeet - currentFirmGeneration;
+            const dispatchOrder = state.generators.firm.filter(g => g.controlMode === 'Auto').sort((a,b) => ({ 'Reciprocating Engine': 1, 'Combined Cycle': 2, 'Steam Turbine': 3 }[a.type] - { 'Reciprocating Engine': 1, 'Combined Cycle': 2, 'Steam Turbine': 3 }[b.type]));
+            
+            if (deficit > 2) { // Need more power
+                for (const gen of dispatchOrder.filter(g => g.status === 'Online' && g.output < g.capacity)) {
+                    if (deficit <= 0) break;
+                    const rampAmount = Math.min(deficit, gen.rampRate, gen.capacity - gen.output);
+                    gen.output += rampAmount; deficit -= rampAmount;
+                }
+                if (deficit > 5) {
+                     for (const gen of dispatchOrder.filter(g => g.status === 'Offline')) {
+                        if (deficit <= 0) break;
+                        gen.status = 'Online';
+                        const initialOutput = Math.min(deficit, gen.rampRate, gen.capacity, gen.minOutput);
+                        gen.output = initialOutput; deficit -= initialOutput;
+                    }
+                }
+            } else if (deficit < -2) { // Need less power
+                let surplus = -deficit;
+                 for (const gen of [...dispatchOrder].reverse().filter(g => g.status === 'Online' && g.output > g.minOutput)) {
+                    if (surplus <= 0) break;
+                    const rampDownAmount = Math.min(surplus, gen.rampRate, gen.output - gen.minOutput);
+                    gen.output -= rampDownAmount; surplus -= rampDownAmount;
+                }
+                if(surplus > 5) {
+                    for (const gen of [...dispatchOrder].reverse().filter(g => g.status === 'Online' && g.output <= g.minOutput)) {
+                        if (surplus <= 0) break;
+                        surplus -= gen.output; gen.output = 0; gen.status = 'Offline';
+                    }
+                }
+            }
+        }
+        
+        function updateGeneratorVitals(gen) {
+            const loadFactor = gen.output > 0 ? gen.output / gen.capacity : 0;
+            if (gen.status === 'Online' || gen.controlMode === 'Manual') {
+                const baseTemp = gen.type === 'Steam Turbine' ? 500 : 350, basePressure = gen.type === 'Steam Turbine' ? 150 : 40, baseEfficiency = gen.type === 'Steam Turbine' ? 35 : 45;
+                gen.vitals.temp = 20 + loadFactor * baseTemp + (Math.random() - 0.5) * 5;
+                gen.vitals.pressure = 1 + loadFactor * basePressure + (Math.random() - 0.5) * 2;
+                gen.vitals.efficiency = (0.8 + loadFactor * 0.15 - Math.pow(loadFactor - 0.9, 2)) * baseEfficiency;
+                if (state.isRunning) { gen.vitals.outputHistory.push(gen.output); if (gen.vitals.outputHistory.length > 30) gen.vitals.outputHistory.shift(); }
+            } else {
+                gen.vitals.temp = Math.max(20, gen.vitals.temp * 0.99);
+                gen.vitals.pressure = Math.max(1, gen.vitals.pressure * 0.98);
+                gen.vitals.efficiency = 0;
+                if (gen.vitals.outputHistory.length > 0) gen.vitals.outputHistory = [];
+            }
+        }
+
+        function simulationLoop() {
+            if (!state.isRunning) return;
+            state.simTime.setMinutes(state.simTime.getMinutes() + 1);
+            const hour = state.simTime.getHours(), minutes = state.simTime.getMinutes();
+            if(state.simTime.getDate() !== state.dailyStats.day) { /* reset daily stats */ }
+
+            state.grid.totalDemand = getDuckCurveDemand(hour);
+
+            const solarFactor = getSolarOutputFactor(hour), windFactor = getWindOutputFactor();
+            state.generators.variable.forEach(gen => {
+                gen.output = (gen.type === 'Solar' ? solarFactor : windFactor) * gen.capacity;
+                gen.status = gen.output > 0 ? 'Online' : 'Offline';
+            });
+            const totalVariableGen = state.generators.variable.reduce((s, g) => s + g.output, 0);
+            
+            const netLoad = state.grid.totalDemand - totalVariableGen;
+            runEMS(netLoad, hour);
+            
+            const manualGeneration = state.generators.firm.reduce((acc, g) => g.controlMode === 'Manual' && g.status === 'Online' ? acc + g.output : acc, 0);
+            const loadForFirmGen = netLoad - state.generators.storage[0].output - manualGeneration;
+            runAGC(loadForFirmGen > 0 ? loadForFirmGen : 0);
+
+            const totalFirmGeneration = state.generators.firm.reduce((acc, g) => acc + g.output, 0);
+            const totalStorageOutput = state.generators.storage[0].output > 0 ? state.generators.storage[0].output : 0;
+            state.grid.totalGeneration = totalFirmGeneration + totalVariableGen + totalStorageOutput;
+
+            const timeStepHours = 1 / 60;
+            state.generators.firm.forEach(gen => { if (gen.status === 'Online') gen.runHours += timeStepHours; updateGeneratorVitals(gen); });
+            
+            if (state.grid.totalDemand > state.dailyStats.maxLoad) state.dailyStats.maxLoad = state.grid.totalDemand;
+            if (state.grid.totalDemand < state.dailyStats.minLoad) state.dailyStats.minLoad = state.grid.totalDemand;
+            state.dailyStats.firmMWh += totalFirmGeneration * timeStepHours;
+            state.dailyStats.variableMWh += totalVariableGen * timeStepHours;
+            
+            if (minutes % 10 === 0 && minutes !== state.lastChartUpdate) { updateCharts(state.simTime); state.lastChartUpdate = minutes; }
+
+            render();
+        }
+
+        // --- UI RENDERING ---
+        function render() {
+            document.getElementById('simulationTime').textContent = state.simTime.toLocaleTimeString();
+            document.getElementById('simulationStatus').innerHTML = `<span class="status-dot ${state.isRunning ? 'status-online' : 'status-offline'}"></span><span>${state.isRunning ? 'RUNNING' : 'PAUSED'}</span>`;
+            
+            document.getElementById('totalDemand').textContent = state.grid.totalDemand.toFixed(1);
+            document.getElementById('totalGeneration').textContent = state.grid.totalGeneration.toFixed(1);
+            const balance = state.grid.totalGeneration - state.grid.totalDemand;
+            document.getElementById('balanceValue').textContent = balance.toFixed(1);
+            const gridBalanceEl = document.getElementById('gridBalance');
+            gridBalanceEl.className = `text-3xl font-bold text-right ${Math.abs(balance) > 2 ? 'text-red-400' : Math.abs(balance) > 0.5 ? 'text-yellow-400' : 'text-green-400'}`;
+            document.getElementById('balanceStatus').className = `font-bold ${Math.abs(balance) > 2 ? 'text-red-400' : Math.abs(balance) > 0.5 ? 'text-yellow-400' : 'text-green-400'}`;
+            document.getElementById('gridFrequency').textContent = (60.00 + balance / 50).toFixed(2);
+
+            document.getElementById('variable-generators-container').innerHTML = state.generators.variable.map(createAssetHTML).join('');
+            document.getElementById('storage-container').innerHTML = state.generators.storage.map(createAssetHTML).join('');
+            document.getElementById('firm-generators-list').innerHTML = state.generators.firm.map(createAssetHTML).join('');
+
+            document.getElementById('maxLoad').textContent = `${state.dailyStats.maxLoad.toFixed(1)} MW`;
+            document.getElementById('minLoad').textContent = `${state.dailyStats.minLoad < 900 ? state.dailyStats.minLoad.toFixed(1) : '--'} MW`;
+            document.getElementById('firmGenTotal').textContent = `${state.dailyStats.firmMWh.toFixed(1)} MWh`;
+            document.getElementById('variableGenTotal').textContent = `${state.dailyStats.variableMWh.toFixed(1)} MWh`;
+
+            if (state.activeAGCGeneratorId) renderAGCDetails(state.generators.firm.find(g => g.id === state.activeAGCGeneratorId));
+        }
+
+        function createAssetHTML(gen) {
+            const isFirm = !!gen.rampRate;
+            const statusClasses = { Online: 'status-online', Offline: 'status-offline', Standby: 'status-standby', Charging: 'status-charging', Discharging: 'status-discharging' };
+            let statusClass = gen.controlMode === 'Manual' ? 'status-manual' : statusClasses[gen.status] || 'status-offline';
+            let isSelected = isFirm && gen.id === state.activeAGCGeneratorId;
+            
+            const barWidth = (gen.output / gen.capacity) * 100;
+            const isStorage = gen.type === 'Storage';
+            const outputText = isStorage ? `${gen.output.toFixed(1)} <span class="text-xs text-gray-400">MW</span>` : `${gen.output.toFixed(1)} / ${gen.capacity.toFixed(1)} <span class="text-xs text-gray-400">MW</span>`;
+            
+            let bottomText;
+            if (isStorage) {
+                bottomText = `SoC: ${gen.stateOfCharge.toFixed(1)} MWh`;
+            } else if (isFirm) {
+                bottomText = `Run Hours: ${gen.runHours.toFixed(1)}`;
+            } else { // It's a variable generator
+                bottomText = `Type: ${gen.type}`;
+            }
+            
+            const storageBarWidth = isStorage ? (gen.stateOfCharge / gen.capacity) * 100 : 0;
+
+            return `
+                <div class="generator-card ${isSelected ? 'selected' : ''} flex items-center" id="${gen.id}" ${isFirm ? `onclick="window.selectGenerator('${gen.id}')"` : ''}>
+                    <div class="flex-grow">
+                        <div class="flex items-center text-sm">
+                            <span class="status-dot ${statusClass}"></span>
+                            <span class="font-semibold text-white">${gen.name}</span>
+                            ${gen.controlMode === 'Manual' ? '<span class="ml-2 text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">Manual</span>' : ''}
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-1.5 mt-2">
+                            <div class="${isStorage ? 'bg-pink-500' : 'bg-blue-600'} h-1.5 rounded-full" style="width: ${isStorage ? storageBarWidth : barWidth}%"></div>
+                        </div>
+                    </div>
+                    <div class="text-right ml-4 flex-shrink-0 w-32">
+                        <div class="font-bold text-base">${outputText}</div>
+                        <div class="text-xs text-gray-400">${bottomText}</div>
+                    </div>
+                </div>`;
+        }
+
+        function renderAGCDetails(gen) {
+            if (!gen) {
+                document.getElementById('agc-placeholder').style.display = 'block';
+                document.getElementById('agc-details').classList.add('hidden');
+                return;
+            }
+            document.getElementById('agc-placeholder').style.display = 'none';
+            document.getElementById('agc-details').classList.remove('hidden');
+
+            document.getElementById('detailGenName').textContent = gen.name;
+            document.getElementById('detailGenType').textContent = gen.type;
+            const statusEl = document.getElementById('detailGenStatus');
+            statusEl.textContent = gen.status;
+            statusEl.className = `px-3 py-1 rounded-full text-sm font-semibold text-white ${gen.status === 'Online' ? 'bg-green-600' : 'bg-red-600'}`;
+            
+            document.getElementById('detailTemp').textContent = `${gen.vitals.temp.toFixed(1)} °C`;
+            document.getElementById('detailPressure').textContent = `${gen.vitals.pressure.toFixed(1)} Bar`;
+            document.getElementById('detailEfficiency').textContent = `${gen.vitals.efficiency.toFixed(1)} %`;
+            document.getElementById('detailControlMode').textContent = gen.controlMode;
+
+            detailGenChart.data.datasets[0].data = [...gen.vitals.outputHistory];
+            detailGenChart.data.labels = gen.vitals.outputHistory.map((_, i) => `${i}`);
+            detailGenChart.update();
+        }
+
+        // --- EVENT HANDLERS & INITIALIZATION ---
+        window.selectGenerator = (genId) => {
+            state.activeAGCGeneratorId = genId;
+            render();
+        };
+
+        function setupEventListeners() {
+            document.getElementById('startBtn').addEventListener('click', () => { if (!state.isRunning) { state.isRunning = true; state.intervalId = setInterval(simulationLoop, 1000 / state.simulationSpeed); render(); }});
+            document.getElementById('pauseBtn').addEventListener('click', () => { state.isRunning = false; clearInterval(state.intervalId); render(); });
+            document.getElementById('resetBtn').addEventListener('click', () => { clearInterval(state.intervalId); state = createInitialState(); initializeCharts(); render(); });
+            document.getElementById('speedControl').addEventListener('input', (e) => {
+                state.simulationSpeed = Number(e.target.value);
+                document.getElementById('speedLabel').textContent = `${state.simulationSpeed}x`;
+                if (state.isRunning) { clearInterval(state.intervalId); state.intervalId = setInterval(simulationLoop, 1000 / (state.simulationSpeed / 60)); }
+            });
+            document.getElementById('tab-buttons').addEventListener('click', (e) => {
+                if (e.target.matches('.tab-button')) {
+                    const tabId = e.target.dataset.tab;
+                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    e.target.classList.add('active');
+                    document.getElementById(`tab-${tabId}`).classList.add('active');
+                }
+            });
+            const agcControlAction = (action) => {
+                const gen = state.generators.firm.find(g => g.id === state.activeAGCGeneratorId);
+                if(gen) action(gen);
+            }
+            document.getElementById('forceStartBtn').addEventListener('click', () => agcControlAction(g => { g.controlMode = 'Manual'; g.status = 'Online'; }));
+            document.getElementById('forceStopBtn').addEventListener('click', () => agcControlAction(g => { g.controlMode = 'Manual'; g.status = 'Offline'; g.output = 0; }));
+            document.getElementById('returnAutoBtn').addEventListener('click', () => agcControlAction(g => { g.controlMode = 'Auto'; }));
+        }
+
+        window.onload = () => {
+            const initialSpeed = Number(document.getElementById('speedControl').value);
+            state.simulationSpeed = initialSpeed;
+            document.getElementById('speedLabel').textContent = `${initialSpeed}x`;
+            initializeCharts();
+            setupEventListeners();
+            render();
+        };
+    </script>
+</body>
+</html>
+
+
