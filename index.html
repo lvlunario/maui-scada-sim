@@ -70,6 +70,18 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
+        .table-wrapper { background-color: #1f2937; border-radius: 0.5rem; overflow: hidden; }
+        .styled-table { width: 100%; border-collapse: collapse; }
+        .styled-table th, .styled-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #374151; }
+        .styled-table th { background-color: #374151; font-weight: 600; font-size: 0.875rem; color: #d1d5db; }
+        .styled-table tbody tr:last-child td { border-bottom: none; }
+        .styled-table tbody tr:hover { background-color: #374151; }
+
+        /* Mode Switch Styles */
+        .mode-switch-wrapper { display: flex; align-items: center; justify-content: center; gap: 0.5rem; background-color: #1f2937; padding: 0.25rem; border-radius: 9999px; }
+        .mode-switch-btn { padding: 0.5rem 1rem; border: none; background-color: transparent; color: #9ca3af; font-weight: 600; border-radius: 9999px; cursor: pointer; transition: all 0.2s; }
+        .mode-switch-btn.active { background-color: #3b82f6; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
@@ -94,9 +106,16 @@
             <div class="lg:w-1/4 flex-shrink-0">
                 <!-- Simulation Controls -->
                 <div class="bg-gray-800 p-4 rounded-lg mb-6">
-                    <h3 class="font-bold text-white mb-3">SIMULATION CONTROL</h3>
+                    <h3 class="font-bold text-white mb-3 text-center">OPERATIONAL MODE</h3>
+                    <div class="mode-switch-wrapper mb-4">
+                        <button id="simModeBtn" class="mode-switch-btn active" data-mode="simulation">Simulation</button>
+                        <button id="forecastModeBtn" class="mode-switch-btn" data-mode="forecast">Real-Time Forecast</button>
+                    </div>
+                    <div id="apiStatus" class="text-center text-xs text-gray-400 mb-3 h-4"></div>
+
+                    <h3 class="font-bold text-white mb-3">SYSTEM CONTROL</h3>
                     <div class="flex items-center space-x-2 mb-4">
-                        <button id="startBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm">START</button>
+                        <button id="startBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm disabled:opacity-50" disabled>START</button>
                         <button id="pauseBtn" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm">PAUSE</button>
                         <button id="resetBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg transition-colors text-sm">RESET</button>
                     </div>
@@ -104,6 +123,25 @@
                         <label for="speedControl">Speed:</label>
                         <span id="speedLabel" class="font-mono w-16">60x</span>
                         <input id="speedControl" type="range" min="1" max="7200" value="60" class="w-full">
+                    </div>
+                </div>
+
+                <!-- Weather Conditions -->
+                <div class="bg-gray-800 p-4 rounded-lg mb-6">
+                    <h3 class="font-bold text-white mb-3">WEATHER CONDITIONS</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Solar Irradiance:</span>
+                            <span id="weatherIrradiance" class="font-bold text-yellow-400">-- W/m²</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Cloud Cover:</span>
+                            <span id="weatherCloud" class="font-bold text-gray-300">-- %</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">Wind Speed:</span>
+                            <span id="weatherWind" class="font-bold text-blue-400">-- mph</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -222,10 +260,9 @@
 
                     <!-- Reports Tab -->
                     <div id="tab-reports" class="tab-content">
-                        <div class="text-center text-gray-400 py-20">
-                            <h2 class="text-2xl font-bold mb-4">Reporting & Analytics</h2>
-                            <p>This section is under construction.</p>
-                             <p>Future features will include: detailed run-hour reports, maintenance scheduling, and historical data analysis.</p>
+                        <h2 class="section-header mb-4">Maintenance & Reliability Dashboard</h2>
+                        <div id="reports-container" class="table-wrapper">
+                            <!-- Table will be dynamically generated here -->
                         </div>
                     </div>
                 </div>
@@ -237,7 +274,7 @@
         // --- INDUSTRIAL CONFIGURATION ---
         const config = {
             firmGenerators: [
-                { id: 'ST-1', name: 'Māʻalaea ST-1', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60 /*min*/, maintenanceInterval: 4000 /*hr*/ },
+                { id: 'ST-1', name: 'Māʻalaea ST-1', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
                 { id: 'ST-2', name: 'Māʻalaea ST-2', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
                 { id: 'ST-3', name: 'Māʻalaea ST-3', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
                 { id: 'ST-4', name: 'Māʻalaea ST-4', type: 'Steam Turbine', capacity: 10, minOutput: 2, runHours: 0, rampRate: 0.1, startupTime: 60, maintenanceInterval: 4000 },
@@ -258,22 +295,27 @@
             ],
             storageUnits: [
                  { id: 'bess-aes', name: 'AES Kuihelani BESS', type: 'Storage', capacity: 240, maxChargeRate: 60, maxDischargeRate: 60, efficiency: 0.9 }
-            ]
+            ],
+            // More realistic load profile for Maui, based on typical island patterns
+            mauiLoadProfile: [95,90,85,82,80,85,95,115,130,140,145,150,145,140,135,140,155,175,190,200,185,160,135,110]
         };
 
         // --- STATE INITIALIZATION ---
         const createInitialState = () => ({
-            simTime: new Date(2025, 8, 28, 0, 0, 0),
+            simTime: new Date(new Date().toDateString()), // Start at midnight of the current day
             isRunning: false,
             simulationSpeed: 60,
             intervalId: null,
+            mode: 'simulation', // 'simulation' or 'forecast'
+            api: { forecastData: null, status: 'idle' }, // idle, loading, success, error
             grid: { totalDemand: 0, totalGeneration: 0, frequency: 60.0 },
-            dailyStats: { maxLoad: 0, minLoad: 999, firmMWh: 0, variableMWh: 0, day: 28 },
+            weather: { cloudCover: 0, windSpeed: 0, solarIrradiance: 0, _cloudSeed: Math.random() * 1000, _windSeed: Math.random() * 1000 },
+            dailyStats: { maxLoad: 0, minLoad: 999, firmMWh: 0, variableMWh: 0, day: new Date().getDate() },
             chartData: { labels: [], demand: [], netDemand: [], solarGen: [], windGen: [], firmGen: [], storageGen: [] },
             lastChartUpdate: -999,
             activeAGCGeneratorId: null,
             generators: {
-                firm: config.firmGenerators.map(g => ({ ...g, status: 'Offline', output: 0, controlMode: 'Auto', vitals: { temp: 20, pressure: 1, efficiency: 0, outputHistory: [] } })),
+                firm: config.firmGenerators.map(g => ({ ...g, runHours: 0, status: 'Offline', output: 0, controlMode: 'Auto', vitals: { temp: 20, pressure: 1, efficiency: 0, outputHistory: [] } })),
                 variable: config.variableGenerators.map(g => ({ ...g, status: 'Offline', output: 0 })),
                 storage: config.storageUnits.map(s => ({ ...s, stateOfCharge: s.capacity / 2, status: 'Standby', output: 0 })),
             }
@@ -281,25 +323,45 @@
 
         let state = createInitialState();
         
+        // --- API & REAL-TIME DATA ---
+        async function fetchRealtimeData() {
+            state.api.status = 'loading';
+            render();
+            const lat = 20.7984; // Maui Latitude
+            const lon = -156.3319; // Maui Longitude
+            // Switched to more reliable parameters and auto timezone to fix 400 error.
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,cloudcover&timezone=auto`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                state.api.forecastData = data.hourly;
+                state.api.status = 'success';
+            } catch (error) {
+                console.error("Failed to fetch weather data. This may be due to a network issue or security restrictions in the execution environment.", error);
+                state.api.status = 'error';
+            }
+            render();
+        }
+
         // --- CHARTS ---
         let duckCurveChart, generationMixChart, detailGenChart;
 
         function initializeCharts() {
-            const chartOptions = (title) => ({ responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' }, title: { display: true, text: 'MW', color: '#9ca3af' } } }, plugins: { legend: { labels: { color: '#e5e7eb' } } }, animation: { duration: 0 } });
-            
+            const chartOptions = () => ({ responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' }, title: { display: true, text: 'MW', color: '#9ca3af' } } }, plugins: { legend: { labels: { color: '#e5e7eb' } } }, animation: { duration: 0 } });
             if (duckCurveChart) duckCurveChart.destroy();
-            duckCurveChart = new Chart(document.getElementById('duckCurveChart').getContext('2d'), { type: 'line', data: { labels: state.chartData.labels, datasets: [{ label: 'Total Demand', data: state.chartData.demand, borderColor: '#22d3ee', backgroundColor: '#22d3ee20', tension: 0.3, pointRadius: 0 }, { label: 'Net Demand', data: state.chartData.netDemand, borderColor: '#facc15', backgroundColor: '#facc1520', tension: 0.3, pointRadius: 0 }] }, options: chartOptions('Daily Load Profile') });
-
+            duckCurveChart = new Chart(document.getElementById('duckCurveChart').getContext('2d'), { type: 'line', data: { labels: state.chartData.labels, datasets: [{ label: 'Total Demand', data: state.chartData.demand, borderColor: '#22d3ee', backgroundColor: '#22d3ee20', tension: 0.3, pointRadius: 0 }, { label: 'Net Demand', data: state.chartData.netDemand, borderColor: '#facc15', backgroundColor: '#facc1520', tension: 0.3, pointRadius: 0 }] }, options: chartOptions() });
             if (generationMixChart) generationMixChart.destroy();
-            generationMixChart = new Chart(document.getElementById('generationMixChart').getContext('2d'), { type: 'line', data: { labels: state.chartData.labels, datasets: [{ label: 'Solar', data: state.chartData.solarGen, backgroundColor: '#f59e0b', borderColor: '#f59e0b', fill: true, pointRadius: 0 }, { label: 'Wind', data: state.chartData.windGen, backgroundColor: '#3b82f6', borderColor: '#3b82f6', fill: true, pointRadius: 0 }, { label: 'Storage', data: state.chartData.storageGen, backgroundColor: '#ec4899', borderColor: '#ec4899', fill: true, pointRadius: 0 }, { label: 'Firm', data: state.chartData.firmGen, backgroundColor: '#ef4444', borderColor: '#ef4444', fill: true, pointRadius: 0 }] }, options: { ...chartOptions('Generation Mix'), scales: { ...chartOptions().scales, y: { ...chartOptions().scales.y, stacked: true } } } });
-
+            generationMixChart = new Chart(document.getElementById('generationMixChart').getContext('2d'), { type: 'line', data: { labels: state.chartData.labels, datasets: [{ label: 'Solar', data: state.chartData.solarGen, backgroundColor: '#f59e0b', borderColor: '#f59e0b', fill: true, pointRadius: 0 }, { label: 'Wind', data: state.chartData.windGen, backgroundColor: '#3b82f6', borderColor: '#3b82f6', fill: true, pointRadius: 0 }, { label: 'Storage', data: state.chartData.storageGen, backgroundColor: '#ec4899', borderColor: '#ec4899', fill: true, pointRadius: 0 }, { label: 'Firm', data: state.chartData.firmGen, backgroundColor: '#ef4444', borderColor: '#ef4444', fill: true, pointRadius: 0 }] }, options: { ...chartOptions(), scales: { ...chartOptions().scales, y: { ...chartOptions().scales.y, stacked: true } } } });
             if(detailGenChart) detailGenChart.destroy();
-            detailGenChart = new Chart(document.getElementById('detailGenChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ label: 'Output (MW)', data: [], borderColor: '#22d3ee', backgroundColor: '#22d3ee20', tension: 0.3, pointRadius: 2, fill: true }] }, options: { ...chartOptions('Generator Output'), scales: { x: { ticks: { display: false } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } } }, plugins: { legend: { display: false } } } });
+            detailGenChart = new Chart(document.getElementById('detailGenChart').getContext('2d'), { type: 'line', data: { labels: [], datasets: [{ label: 'Output (MW)', data: [], borderColor: '#22d3ee', backgroundColor: '#22d3ee20', tension: 0.3, pointRadius: 2, fill: true }] }, options: { ...chartOptions(), scales: { x: { ticks: { display: false } } }, plugins: { legend: { display: false } } } });
         }
         
         function updateCharts(time) {
             const timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             state.chartData.labels.push(timeString);
+            Object.values(state.chartData).forEach(arr => {if (arr.length > 144) arr.shift()});
             state.chartData.demand.push(state.grid.totalDemand);
             const totalVariableGen = state.generators.variable.reduce((s, g) => s + g.output, 0);
             state.chartData.netDemand.push(state.grid.totalDemand - totalVariableGen);
@@ -307,18 +369,45 @@
             state.chartData.windGen.push(state.generators.variable.filter(g => g.type === 'Wind').reduce((s, g) => s + g.output, 0));
             state.chartData.storageGen.push(state.generators.storage[0].output);
             state.chartData.firmGen.push(state.generators.firm.reduce((s, g) => s + g.output, 0));
-
-            const maxDataPoints = 144;
-            if (state.chartData.labels.length > maxDataPoints) Object.values(state.chartData).forEach(arr => arr.shift());
-            
-            duckCurveChart.update();
-            generationMixChart.update();
+            duckCurveChart.update('none'); generationMixChart.update('none');
         }
 
         // --- SIMULATION LOGIC ---
-        function getDuckCurveDemand(hour) { return [90,85,80,78,80,95,110,120,125,120,115,110,105,100,110,125,145,170,180,185,175,150,120,100][hour]+(Math.random()-.5)*5; }
-        function getSolarOutputFactor(hour) { const p=[0,0,0,0,0,.1,.3,.5,.7,.85,.95,1,.95,.85,.7,.5,.3,.1,0,0,0,0,0,0]; return p[hour]*(Math.random()>.9?Math.random()*.6:1); }
-        function getWindOutputFactor() { return 0.3 + Math.random() * 0.5; }
+        function updateWeather(time) {
+            const hour = time.getHours();
+            const minutesSinceMidnight = hour * 60 + time.getMinutes();
+            const windNoise = (Math.sin(minutesSinceMidnight / 360 + state.weather._windSeed) + Math.sin(minutesSinceMidnight / 60 + state.weather._windSeed)) / 2;
+            const simulatedWind = Math.max(0, 15 + windNoise * 10);
+
+            if (state.mode === 'simulation') {
+                const cloudNoise = (Math.sin(minutesSinceMidnight / 180 + state.weather._cloudSeed) + Math.sin(minutesSinceMidnight / 45 + state.weather._cloudSeed)) / 2;
+                state.weather.cloudCover = Math.max(0, Math.min(100, 30 + cloudNoise * 50));
+                state.weather.windSpeed = simulatedWind;
+                const angle = Math.max(0, Math.sin(minutesSinceMidnight / (24 * 60) * Math.PI * 2 - Math.PI / 2));
+                state.weather.solarIrradiance = 1000 * angle;
+            } else if (state.mode === 'forecast' && state.api.forecastData) {
+                // Calculate irradiance based on sun angle, then use real cloud cover from API
+                const angle = Math.max(0, Math.sin(minutesSinceMidnight / (24 * 60) * Math.PI * 2 - Math.PI / 2));
+                state.weather.solarIrradiance = 1000 * angle;
+                state.weather.cloudCover = state.api.forecastData.cloudcover[hour] || 0;
+                // Fallback to simulated wind as API request for wind was unstable
+                state.weather.windSpeed = simulatedWind;
+            }
+        }
+
+        function calculateVariableGeneration() {
+            const effectiveIrradiance = state.weather.solarIrradiance * (1 - (state.weather.cloudCover / 100) * 0.75);
+            const solarOutputFactor = effectiveIrradiance / 1000;
+            const windSpeed = state.weather.windSpeed;
+            let windOutputFactor = 0;
+            const cutIn = 7, rated = 30, cutOut = 55;
+            if (windSpeed > cutIn && windSpeed <= rated) { windOutputFactor = Math.pow((windSpeed - cutIn) / (rated - cutIn), 2); } 
+            else if (windSpeed > rated && windSpeed <= cutOut) { windOutputFactor = 1.0; }
+            state.generators.variable.forEach(gen => {
+                gen.output = (gen.type === 'Solar' ? solarOutputFactor : windOutputFactor) * gen.capacity;
+                gen.status = gen.output > 0.1 ? 'Online' : 'Offline';
+            });
+        }
 
         function runEMS(netLoad, hour) { const b=state.generators.storage[0],t=1/60;if(hour>=10&&hour<=15&&netLoad<0){const p=Math.min(b.maxChargeRate,-netLoad,(b.capacity-b.stateOfCharge)/(b.efficiency*t));b.output=-p;b.stateOfCharge+=p*t*b.efficiency;b.status='Charging';}else if(hour>=18&&hour<=21&&netLoad>150&&b.stateOfCharge>0){const p=Math.min(b.maxDischargeRate,netLoad-150,b.stateOfCharge/t);b.output=p;b.stateOfCharge-=p*t;b.status='Discharging';}else{b.output=0;b.status='Standby';}b.stateOfCharge=Math.max(0,Math.min(b.capacity,b.stateOfCharge)); }
 
@@ -326,34 +415,13 @@
             let currentFirmGeneration = state.generators.firm.reduce((acc, g) => g.controlMode === 'Auto' ? acc + g.output : acc, 0);
             let deficit = loadToMeet - currentFirmGeneration;
             const dispatchOrder = state.generators.firm.filter(g => g.controlMode === 'Auto').sort((a,b) => ({ 'Reciprocating Engine': 1, 'Combined Cycle': 2, 'Steam Turbine': 3 }[a.type] - { 'Reciprocating Engine': 1, 'Combined Cycle': 2, 'Steam Turbine': 3 }[b.type]));
-            
-            if (deficit > 2) { // Need more power
-                for (const gen of dispatchOrder.filter(g => g.status === 'Online' && g.output < g.capacity)) {
-                    if (deficit <= 0) break;
-                    const rampAmount = Math.min(deficit, gen.rampRate, gen.capacity - gen.output);
-                    gen.output += rampAmount; deficit -= rampAmount;
-                }
-                if (deficit > 5) {
-                     for (const gen of dispatchOrder.filter(g => g.status === 'Offline')) {
-                        if (deficit <= 0) break;
-                        gen.status = 'Online';
-                        const initialOutput = Math.min(deficit, gen.rampRate, gen.capacity, gen.minOutput);
-                        gen.output = initialOutput; deficit -= initialOutput;
-                    }
-                }
-            } else if (deficit < -2) { // Need less power
+            if (deficit > 2) {
+                for (const gen of dispatchOrder.filter(g => g.status === 'Online' && g.output < g.capacity)) { if (deficit <= 0) break; const r = Math.min(deficit, gen.rampRate, gen.capacity - gen.output); gen.output += r; deficit -= r; }
+                if (deficit > 5) { for (const gen of dispatchOrder.filter(g => g.status === 'Offline')) { if (deficit <= 0) break; gen.status = 'Online'; const o = Math.min(deficit, gen.rampRate, gen.capacity, gen.minOutput); gen.output = o; deficit -= o; } }
+            } else if (deficit < -2) {
                 let surplus = -deficit;
-                 for (const gen of [...dispatchOrder].reverse().filter(g => g.status === 'Online' && g.output > g.minOutput)) {
-                    if (surplus <= 0) break;
-                    const rampDownAmount = Math.min(surplus, gen.rampRate, gen.output - gen.minOutput);
-                    gen.output -= rampDownAmount; surplus -= rampDownAmount;
-                }
-                if(surplus > 5) {
-                    for (const gen of [...dispatchOrder].reverse().filter(g => g.status === 'Online' && g.output <= g.minOutput)) {
-                        if (surplus <= 0) break;
-                        surplus -= gen.output; gen.output = 0; gen.status = 'Offline';
-                    }
-                }
+                for (const gen of [...dispatchOrder].reverse().filter(g => g.status === 'Online' && g.output > g.minOutput)) { if (surplus <= 0) break; const r = Math.min(surplus, gen.rampRate, gen.output - gen.minOutput); gen.output -= r; surplus -= r; }
+                if(surplus > 5) { for (const gen of [...dispatchOrder].reverse().filter(g => g.status === 'Online' && g.output <= g.minOutput)) { if (surplus <= 0) break; surplus -= gen.output; gen.output = 0; gen.status = 'Offline'; } }
             }
         }
         
@@ -378,45 +446,55 @@
             state.simTime.setMinutes(state.simTime.getMinutes() + 1);
             const hour = state.simTime.getHours(), minutes = state.simTime.getMinutes();
             if(state.simTime.getDate() !== state.dailyStats.day) { /* reset daily stats */ }
-
-            state.grid.totalDemand = getDuckCurveDemand(hour);
-
-            const solarFactor = getSolarOutputFactor(hour), windFactor = getWindOutputFactor();
-            state.generators.variable.forEach(gen => {
-                gen.output = (gen.type === 'Solar' ? solarFactor : windFactor) * gen.capacity;
-                gen.status = gen.output > 0 ? 'Online' : 'Offline';
-            });
+            updateWeather(state.simTime);
+            state.grid.totalDemand = config.mauiLoadProfile[hour] + (Math.random()-.5)*5;
+            calculateVariableGeneration();
             const totalVariableGen = state.generators.variable.reduce((s, g) => s + g.output, 0);
-            
             const netLoad = state.grid.totalDemand - totalVariableGen;
             runEMS(netLoad, hour);
-            
             const manualGeneration = state.generators.firm.reduce((acc, g) => g.controlMode === 'Manual' && g.status === 'Online' ? acc + g.output : acc, 0);
             const loadForFirmGen = netLoad - state.generators.storage[0].output - manualGeneration;
             runAGC(loadForFirmGen > 0 ? loadForFirmGen : 0);
-
             const totalFirmGeneration = state.generators.firm.reduce((acc, g) => acc + g.output, 0);
             const totalStorageOutput = state.generators.storage[0].output > 0 ? state.generators.storage[0].output : 0;
             state.grid.totalGeneration = totalFirmGeneration + totalVariableGen + totalStorageOutput;
-
             const timeStepHours = 1 / 60;
             state.generators.firm.forEach(gen => { if (gen.status === 'Online') gen.runHours += timeStepHours; updateGeneratorVitals(gen); });
-            
             if (state.grid.totalDemand > state.dailyStats.maxLoad) state.dailyStats.maxLoad = state.grid.totalDemand;
             if (state.grid.totalDemand < state.dailyStats.minLoad) state.dailyStats.minLoad = state.grid.totalDemand;
             state.dailyStats.firmMWh += totalFirmGeneration * timeStepHours;
             state.dailyStats.variableMWh += totalVariableGen * timeStepHours;
-            
             if (minutes % 10 === 0 && minutes !== state.lastChartUpdate) { updateCharts(state.simTime); state.lastChartUpdate = minutes; }
-
             render();
         }
 
         // --- UI RENDERING ---
         function render() {
+            // Main status
             document.getElementById('simulationTime').textContent = state.simTime.toLocaleTimeString();
             document.getElementById('simulationStatus').innerHTML = `<span class="status-dot ${state.isRunning ? 'status-online' : 'status-offline'}"></span><span>${state.isRunning ? 'RUNNING' : 'PAUSED'}</span>`;
             
+            // API status
+            const apiStatusEl = document.getElementById('apiStatus');
+            const startBtn = document.getElementById('startBtn');
+            if(state.mode === 'forecast') {
+                switch(state.api.status) {
+                    case 'idle': apiStatusEl.textContent = 'Ready to fetch forecast.'; break;
+                    case 'loading': apiStatusEl.textContent = 'Fetching weather forecast...'; break;
+                    case 'success': apiStatusEl.textContent = 'Forecast loaded successfully.'; startBtn.disabled = false; break;
+                    case 'error': apiStatusEl.textContent = 'Error fetching forecast.'; break;
+                }
+            } else {
+                apiStatusEl.textContent = 'Simulation uses internal model.';
+                startBtn.disabled = false;
+            }
+
+            // Weather
+            document.getElementById('weatherIrradiance').textContent = `${state.weather.solarIrradiance.toFixed(0)} W/m²`;
+            document.getElementById('weatherCloud').textContent = `${(state.weather.cloudCover).toFixed(0)} %`;
+            document.getElementById('weatherWind').textContent = `${state.weather.windSpeed.toFixed(1)} mph`;
+            
+            // KPIs
             document.getElementById('totalDemand').textContent = state.grid.totalDemand.toFixed(1);
             document.getElementById('totalGeneration').textContent = state.grid.totalGeneration.toFixed(1);
             const balance = state.grid.totalGeneration - state.grid.totalDemand;
@@ -425,16 +503,18 @@
             gridBalanceEl.className = `text-3xl font-bold text-right ${Math.abs(balance) > 2 ? 'text-red-400' : Math.abs(balance) > 0.5 ? 'text-yellow-400' : 'text-green-400'}`;
             document.getElementById('balanceStatus').className = `font-bold ${Math.abs(balance) > 2 ? 'text-red-400' : Math.abs(balance) > 0.5 ? 'text-yellow-400' : 'text-green-400'}`;
             document.getElementById('gridFrequency').textContent = (60.00 + balance / 50).toFixed(2);
-
+            
+            // Asset Lists
             document.getElementById('variable-generators-container').innerHTML = state.generators.variable.map(createAssetHTML).join('');
             document.getElementById('storage-container').innerHTML = state.generators.storage.map(createAssetHTML).join('');
             document.getElementById('firm-generators-list').innerHTML = state.generators.firm.map(createAssetHTML).join('');
-
+            
+            // Reports
             document.getElementById('maxLoad').textContent = `${state.dailyStats.maxLoad.toFixed(1)} MW`;
             document.getElementById('minLoad').textContent = `${state.dailyStats.minLoad < 900 ? state.dailyStats.minLoad.toFixed(1) : '--'} MW`;
             document.getElementById('firmGenTotal').textContent = `${state.dailyStats.firmMWh.toFixed(1)} MWh`;
             document.getElementById('variableGenTotal').textContent = `${state.dailyStats.variableMWh.toFixed(1)} MWh`;
-
+            renderReportsTab();
             if (state.activeAGCGeneratorId) renderAGCDetails(state.generators.firm.find(g => g.id === state.activeAGCGeneratorId));
         }
 
@@ -443,76 +523,68 @@
             const statusClasses = { Online: 'status-online', Offline: 'status-offline', Standby: 'status-standby', Charging: 'status-charging', Discharging: 'status-discharging' };
             let statusClass = gen.controlMode === 'Manual' ? 'status-manual' : statusClasses[gen.status] || 'status-offline';
             let isSelected = isFirm && gen.id === state.activeAGCGeneratorId;
-            
             const barWidth = (gen.output / gen.capacity) * 100;
             const isStorage = gen.type === 'Storage';
             const outputText = isStorage ? `${gen.output.toFixed(1)} <span class="text-xs text-gray-400">MW</span>` : `${gen.output.toFixed(1)} / ${gen.capacity.toFixed(1)} <span class="text-xs text-gray-400">MW</span>`;
-            
             let bottomText;
-            if (isStorage) {
-                bottomText = `SoC: ${gen.stateOfCharge.toFixed(1)} MWh`;
-            } else if (isFirm) {
-                bottomText = `Run Hours: ${gen.runHours.toFixed(1)}`;
-            } else { // It's a variable generator
-                bottomText = `Type: ${gen.type}`;
-            }
-            
+            if (isStorage) { bottomText = `SoC: ${gen.stateOfCharge.toFixed(1)} MWh`; } 
+            else if (isFirm) { bottomText = `Run Hours: ${gen.runHours.toFixed(1)}`; } 
+            else { bottomText = `Type: ${gen.type}`; }
             const storageBarWidth = isStorage ? (gen.stateOfCharge / gen.capacity) * 100 : 0;
-
-            return `
-                <div class="generator-card ${isSelected ? 'selected' : ''} flex items-center" id="${gen.id}" ${isFirm ? `onclick="window.selectGenerator('${gen.id}')"` : ''}>
-                    <div class="flex-grow">
-                        <div class="flex items-center text-sm">
-                            <span class="status-dot ${statusClass}"></span>
-                            <span class="font-semibold text-white">${gen.name}</span>
-                            ${gen.controlMode === 'Manual' ? '<span class="ml-2 text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">Manual</span>' : ''}
-                        </div>
-                        <div class="w-full bg-gray-700 rounded-full h-1.5 mt-2">
-                            <div class="${isStorage ? 'bg-pink-500' : 'bg-blue-600'} h-1.5 rounded-full" style="width: ${isStorage ? storageBarWidth : barWidth}%"></div>
-                        </div>
-                    </div>
-                    <div class="text-right ml-4 flex-shrink-0 w-32">
-                        <div class="font-bold text-base">${outputText}</div>
-                        <div class="text-xs text-gray-400">${bottomText}</div>
-                    </div>
-                </div>`;
+            return `<div class="generator-card ${isSelected ? 'selected' : ''} flex items-center" id="${gen.id}" ${isFirm ? `onclick="window.selectGenerator('${gen.id}')"` : ''}><div class="flex-grow"><div class="flex items-center text-sm"><span class="status-dot ${statusClass}"></span><span class="font-semibold text-white">${gen.name}</span>${gen.controlMode==='Manual'?'<span class="ml-2 text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">Manual</span>':''}</div><div class="w-full bg-gray-700 rounded-full h-1.5 mt-2"><div class="${isStorage?'bg-pink-500':'bg-blue-600'} h-1.5 rounded-full" style="width: ${isStorage?storageBarWidth:barWidth}%"></div></div></div><div class="text-right ml-4 flex-shrink-0 w-32"><div class="font-bold text-base">${outputText}</div><div class="text-xs text-gray-400">${bottomText}</div></div></div>`;
+        }
+        
+        function renderReportsTab() {
+            const container = document.getElementById('reports-container');
+            const tableHeader = `<table class="styled-table"><thead><tr><th>Generator ID</th><th>Type</th><th>Run Hours</th><th>Maintenance Interval</th><th>Time to Maintenance</th><th>Status</th><th>Action</th></tr></thead><tbody>`;
+            const tableRows = state.generators.firm.map(gen => {
+                const timeToMaint = gen.maintenanceInterval - gen.runHours;
+                let status, statusColor;
+                if (timeToMaint < 0) { status = 'Service Overdue'; statusColor = 'text-red-400'; } 
+                else if (timeToMaint < 500) { status = 'Warning'; statusColor = 'text-yellow-400'; }
+                else { status = 'Healthy'; statusColor = 'text-green-400'; }
+                return `<tr><td class="font-mono">${gen.id}</td><td>${gen.type}</td><td>${gen.runHours.toFixed(1)}</td><td>${gen.maintenanceInterval}</td><td class="font-semibold">${timeToMaint > 0 ? timeToMaint.toFixed(1) : 0}</td><td><span class="${statusColor} font-bold">${status}</span></td><td><button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-2 rounded" onclick="window.logMaintenance('${gen.id}')">Log Maintenance</button></td></tr>`;
+            }).join('');
+            container.innerHTML = tableHeader + tableRows + `</tbody></table>`;
         }
 
         function renderAGCDetails(gen) {
-            if (!gen) {
-                document.getElementById('agc-placeholder').style.display = 'block';
-                document.getElementById('agc-details').classList.add('hidden');
-                return;
-            }
+            if (!gen) { document.getElementById('agc-placeholder').style.display = 'block'; document.getElementById('agc-details').classList.add('hidden'); return; }
             document.getElementById('agc-placeholder').style.display = 'none';
             document.getElementById('agc-details').classList.remove('hidden');
-
             document.getElementById('detailGenName').textContent = gen.name;
             document.getElementById('detailGenType').textContent = gen.type;
             const statusEl = document.getElementById('detailGenStatus');
             statusEl.textContent = gen.status;
             statusEl.className = `px-3 py-1 rounded-full text-sm font-semibold text-white ${gen.status === 'Online' ? 'bg-green-600' : 'bg-red-600'}`;
-            
             document.getElementById('detailTemp').textContent = `${gen.vitals.temp.toFixed(1)} °C`;
             document.getElementById('detailPressure').textContent = `${gen.vitals.pressure.toFixed(1)} Bar`;
             document.getElementById('detailEfficiency').textContent = `${gen.vitals.efficiency.toFixed(1)} %`;
             document.getElementById('detailControlMode').textContent = gen.controlMode;
-
             detailGenChart.data.datasets[0].data = [...gen.vitals.outputHistory];
             detailGenChart.data.labels = gen.vitals.outputHistory.map((_, i) => `${i}`);
-            detailGenChart.update();
+            detailGenChart.update('none');
         }
 
         // --- EVENT HANDLERS & INITIALIZATION ---
-        window.selectGenerator = (genId) => {
-            state.activeAGCGeneratorId = genId;
-            render();
-        };
+        window.selectGenerator = (genId) => { state.activeAGCGeneratorId = genId; render(); };
+        window.logMaintenance = (genId) => { const gen = state.generators.firm.find(g => g.id === genId); if (gen) { gen.runHours = 0; } render(); };
 
         function setupEventListeners() {
             document.getElementById('startBtn').addEventListener('click', () => { if (!state.isRunning) { state.isRunning = true; state.intervalId = setInterval(simulationLoop, 1000 / state.simulationSpeed); render(); }});
             document.getElementById('pauseBtn').addEventListener('click', () => { state.isRunning = false; clearInterval(state.intervalId); render(); });
-            document.getElementById('resetBtn').addEventListener('click', () => { clearInterval(state.intervalId); state = createInitialState(); initializeCharts(); render(); });
+            document.getElementById('resetBtn').addEventListener('click', () => { 
+                clearInterval(state.intervalId); 
+                state = createInitialState(); 
+                initializeCharts(); 
+                
+                // Visually reset the mode switch to match the new state
+                document.getElementById('simModeBtn').classList.add('active');
+                document.getElementById('forecastModeBtn').classList.remove('active');
+
+                render(); 
+                document.getElementById('startBtn').disabled = false; // Re-enable for default sim mode
+            });
             document.getElementById('speedControl').addEventListener('input', (e) => {
                 state.simulationSpeed = Number(e.target.value);
                 document.getElementById('speedLabel').textContent = `${state.simulationSpeed}x`;
@@ -527,10 +599,23 @@
                     document.getElementById(`tab-${tabId}`).classList.add('active');
                 }
             });
-            const agcControlAction = (action) => {
-                const gen = state.generators.firm.find(g => g.id === state.activeAGCGeneratorId);
-                if(gen) action(gen);
-            }
+            document.querySelector('.mode-switch-wrapper').addEventListener('click', (e) => {
+                if(e.target.matches('.mode-switch-btn')) {
+                    const newMode = e.target.dataset.mode;
+                    if (state.mode === newMode) return;
+                    state.mode = newMode;
+                    document.querySelectorAll('.mode-switch-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    document.getElementById('startBtn').disabled = true; // Disable until ready
+                    if(newMode === 'forecast') {
+                        fetchRealtimeData();
+                    } else {
+                        state.api.status = 'idle';
+                        render();
+                    }
+                }
+            });
+            const agcControlAction = (action) => { const gen = state.generators.firm.find(g => g.id === state.activeAGCGeneratorId); if(gen) action(gen); }
             document.getElementById('forceStartBtn').addEventListener('click', () => agcControlAction(g => { g.controlMode = 'Manual'; g.status = 'Online'; }));
             document.getElementById('forceStopBtn').addEventListener('click', () => agcControlAction(g => { g.controlMode = 'Manual'; g.status = 'Offline'; g.output = 0; }));
             document.getElementById('returnAutoBtn').addEventListener('click', () => agcControlAction(g => { g.controlMode = 'Auto'; }));
@@ -543,9 +628,9 @@
             initializeCharts();
             setupEventListeners();
             render();
+            document.getElementById('startBtn').disabled = false; // Enable for default sim mode
         };
     </script>
 </body>
 </html>
-
 
